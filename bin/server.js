@@ -3,8 +3,6 @@ const app = require('../app')
 
 const {URL_DB, PORT} = process.env;
 
-
-
 mongoose
   .connect(URL_DB, {useNewUrlParser: true, useUnifiedTopology: true})
   .then(() => {
