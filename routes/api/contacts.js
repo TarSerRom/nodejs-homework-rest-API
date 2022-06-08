@@ -1,19 +1,24 @@
-const express = require('express')
-const router = express.Router()
+const express = require("express");
+const router = express.Router();
 const { NotFound, BadRequest } = require("http-errors");
 
-const {Contact, joiSchema} = require("../..//models/contacts")
+const {Contact, joiSchema} = require("../..//models/contacts");
+const {authentificate} = require("../../middlewares");
 
-router.get("/", async (req, res, next) => {
+router.get("/", authentificate, async (req, res, next) => {
   try {
-    const contacts = await Contact.find();
+    const { _id } = req.user;
+    const contacts = await Contact.find(
+      { owner: _id },
+      "-createdAt -updatedAt",
+    );
     res.json(contacts);
   } catch (e) {
     next(e);
   }
 });
 
-router.get("/:contactId", async (req, res, next) => {
+router.get("/:contactId", authentificate, async (req, res, next) => {
   try {
     const { contactId } = req.params;
     const contact = await Contact.findById(contactId);
@@ -29,13 +34,14 @@ router.get("/:contactId", async (req, res, next) => {
   }
 });
 
-router.post('/', async (req, res, next) => {
+router.post('/', authentificate, async (req, res, next) => {
   try{
     const {error} = joiSchema.validate(req.body)
     if(error) {
       throw new BadRequest("missing required name field");
     }
-    const newContact = await Contact.create(req.body);
+    const {_id} = req.user;
+    const newContact = await Contact.create({...req.body, owner: _id});
     res.status(201).json(newContact);
   } catch(e) {
     if(e.message.includes("validation failed")) {
@@ -45,7 +51,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-router.delete("/:contactId", async (req, res, next) => {
+router.delete("/:contactId", authentificate, async (req, res, next) => {
   try {
     const { contactId } = req.params;
     const deleteContact = await Contact.findByIdAndRemove(contactId);
@@ -58,13 +64,8 @@ router.delete("/:contactId", async (req, res, next) => {
   }
 });
 
-router.put('/:contactId', async (req, res, next) => {
+router.put('/:contactId', authentificate, async (req, res, next) => {
   try {
-    const { error } = joiSchema.validate(req.body);
-    if (error) {
-      error.status = 400;
-      throw error;
-    }
     const {contactId} = req.params;
     const updateContact = await Contact.findByIdAndUpdate(contactId, req.body, {new:true});
     res.json(updateContact);
@@ -76,7 +77,7 @@ router.put('/:contactId', async (req, res, next) => {
   }
 });
 
-router.patch("/:contactId/favorite", async (req, res, next) => {
+router.patch("/:contactId/favorite", authentificate, async (req, res, next) => {
   try {
     const {contactId} = req.params;
     const {favorite = false} = req.body;
@@ -89,6 +90,5 @@ router.patch("/:contactId/favorite", async (req, res, next) => {
     next(e);
   }
 });
-
 
 module.exports = router;
