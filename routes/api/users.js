@@ -3,11 +3,17 @@ const router = express.Router();
 const {Conflict, BadRequest, Unathorized} = require("http-errors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const gravatar = require("gravatar");
+const path = require("path");
+const fs = require("fs/promises");
+var Jimp = require("jimp");
 
 const {User, joiLoginSchema, joiUpdateSchema, joiRegisterSchema} = require("../../models/user");
-const {authentificate} = require("../../middlewares");
+const {authentificate, upload} = require("../../middlewares");
 
 const {SECRET_KEY} = process.env;
+
+const avatarDir = path.join(__dirname, "../../", "public", "avatars");
 
 router.post("/signup", async(req, res, next) => {
     try{
@@ -20,12 +26,14 @@ router.post("/signup", async(req, res, next) => {
         if(user){
             throw new Conflict("Email is use");
         }
+        const avatarURL = gravatar.url(email);
         const salt = await bcrypt.genSalt(10);
         const hashPassword = await bcrypt.hash(password, salt);
         const newUser = await User.create({
             email,
             subscription,
             password: hashPassword,
+            avatarURL,
         });
 
         res.status(201).json({
@@ -106,5 +114,23 @@ router.patch("/", authentificate, async (reg, res, next) => {
         next(error);
     }
 });
+
+router.patch("/avatars", authentificate, upload.single("avatar"), async (req, res)=>{
+    const {path: tempUpload, filename} = req.file;
+
+    const image = await Jimp.read(tempUpload);
+    await image.resize(250,250);
+    await image.writeAsync(tempUpload);
+
+    const [extention] = filename.split(".").reverse();
+    const newFileName = `${req.user._id}.${extention}`;
+    const fileUpload = path.join(avatarDir, newFileName);
+    await fs.rename(tempUpload, fileUpload);
+
+    const avatarURL = path.join("avatars", newFileName);
+    await User.findByIdAndUpdate(req.user._id, {avatarURL}, {new:true});
+
+    res.json({avatarURL});
+})
 
 module.exports = router;
